@@ -55,9 +55,9 @@ Gridded emperature change data for the contiguous U.S. in GeoTiff format [`/data
 
 We have included code that can be used to reproduce our analysis in the following [RMarkdown notebooks](https://rmarkdown.rstudio.com/):
 
-1. [Processing nClimDiv data](https://wpmedia.github.io/data-climate-change-usa/analysis/process_nclimdiv.html)
-2. [Modeling temperature change](https://wpmedia.github.io/data-climate-change-usa/analysis/model_temperature_change.html)
-3. [Analyzing nClimGrid raster data](https://wpmedia.github.io/data-climate-change-usa/analysis/analyze_nclimgrid.html)
+1. [Processing nClimDiv data](https://washingtonpost.github.io/data-2C-beyond-the-limit-usa/analysis/process_nclimdiv.html)
+2. [Modeling temperature change](https://washingtonpost.github.io/data-2C-beyond-the-limit-usa/analysis/model_temperature_change.html)
+3. [Analyzing nClimGrid raster data](https://washingtonpost.github.io/data-2C-beyond-the-limit-usa/analysis/analyze_nclimgrid.html)
 
 These files were generated using R version 3.5.1 and the following packages: `tidyverse`, `sf`, `raster`, `scales`.
 

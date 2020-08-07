@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "hotspot_westernslope",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "Drawings": "hotspot_westernslope" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -110.897910838211715, 41.463617791638782 ], [ -110.897910838211715, 37.203432421490021 ], [ -107.052948213691494, 37.203432421490021 ], [ -107.052948213691494, 41.463617791638782 ], [ -110.897910838211715, 41.463617791638782 ] ] ] } }
+]
+}

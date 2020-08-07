@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "hotspot_montana",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "Drawings": "hotspot_montana" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -108.381660999702788, 49.660114790346057 ], [ -108.381660999702788, 46.703728841470891 ], [ -102.369235643001616, 46.703728841470891 ], [ -102.369235643001616, 49.660114790346057 ], [ -108.381660999702788, 49.660114790346057 ] ] ] } }
+]
+}

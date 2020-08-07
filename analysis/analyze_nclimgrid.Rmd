@@ -1,0 +1,108 @@
+---
+title: "Analyzing nClimGrid raster data"
+author: "John Muyskens"
+date: "8/6/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(raster)
+library(sf)
+```
+
+This notebook contains code for analyzing NOAA's Gridded 5km GHCN-Daily Temperature and Precipitation Dataset (nClimGrid). This data set contains monthly average, maximum and minumum temperatures as well as precipitation from 1895 to the present on a roughly 5 kilometer grid. The raw data can be downloaded from the [NCEI's data catalog](https://www.ncei.noaa.gov/thredds/catalog/data-in-development/nclimgrid/catalog.html) in NetCDF format. 
+
+The file we are using is `nclimgrid_tavg.nc` which is just over a gigabyte. This analysis will take a while to run. We have included the finished product here link TK for your convenience.
+
+```{r eval=FALSE}
+num_years = rep(1:170, each=12)
+
+# Load raw data which is monthly average temperatures
+nclimgrid <- brick("../data/raw/nclimgrid_tavg.nc")
+
+# Compute annual mean temperatures 1895-2019
+
+nclimgrid_year_means <- stackApply(nclimgrid,
+     indices = num_years[1:1500],
+     fun = mean,
+     na.rm=TRUE
+)
+
+# Save this file in GeoTiff format so we don't have to do all that work again
+writeRaster(nclimgrid_year_means, "../data/processed/nclimgrid_years.tif", overwrite=TRUE)
+
+# Function to estimate temperature change for the time series represented by one raster pixel
+# This modeling technique is essentially the same as the one used in model_temperature_change.Rmd. 
+# The year_range parameter allows us to create different versions of the function that model different time periods
+slopefun <- function(x, year_range) {
+  # find number of data points per decade
+  # length(dataPerDecade[dataPerDecade > 0]) != length(dataPerDecade)
+  if (all(is.na(x))) {
+    NA
+  } else {
+    lm(x~year_range)$coefficients[2] * (length(year_range) - 1)
+  }
+}
+
+# Version of our function that models the years 1895 through 2019
+slopefun1895 <- function(x) {
+  slopefun(x, 1895:2019)
+}
+
+# Apply the slope function to our annual averages data
+nclimdiv_slopes_1895_jan2020 <-
+  nclimgrid_year_means %>%
+  subset(1:125) %>%
+  calc(slopefun1895)
+
+# Save the file in GeoTiff format
+writeRaster(nclimdiv_slopes_1895, "../data/processed/nclimgrid_slopes_1895_2019.tif", overwrite=TRUE)
+```
+
+## Creating the final map presentation
+
+For mapping purposes only, I used bilinear interpolation to increase the resolution of the raster data. In effect, this smoothes the data which would otherwise look pixelated.
+
+There are missing data gaps wherever there are bodies of water of significant size. To improve the appearance of the coastlines, I am filling these gaps. This means that the final map must feature these bodies of water to mask over the regions where the data is filled in. To do this filling, I use gdal_fillnodata.py, part of the [GDAL](https://gdal.org/) suite of open source GIS tools. 
+
+  gdal_fillnodata.py -md 10 -b 1 -of GTiff "/PATH/TO/REPO/data/processed/nclimgrid_slopes_1895_2019.tif" "/PATH/TO/REPO/data/processed/nclimgrid_slopes_1895_2019_filled.tif"
+
+I used the free and open source GIS application [QGIS](https://qgis.org/en/site/) for the interpolation step, using QGIS Raster > Align Rasters... function with the bilinear method to increase the resolution of the source file `data/processed/nclimgrid_slopes_1895_2019.tif`.
+
+## Hot spot area analysis
+
+We wanted to confirm that the 2ºC contiguous hot spot spanning the Colorado-Utah border was the largest in the Lower 48. To calculate the areas of the largest hot spots, I drew boxes around them in QGIS and exporting them as GeoJSON files. We load these shapes in and use them to clip the temperature change raster, then find the area within the shape that is above 2ºC.
+
+```{r message=FALSE}
+# Load raster data with temperature change estimates
+nclimgrid_slopes_1895 <- raster("../data/processed/nclimgrid_slopes_1895_2019.tif")
+
+temp_area <- function(cropShape) {
+  nclimgrid_slopes_1895 %>%
+    crop(cropShape) %>% 
+    clamp(lower=2, upper=Inf, useValues=FALSE) %>% 
+    mask(x = area(.), mask = .) %>% 
+    cellStats(stat='sum', na.rm=TRUE)
+}
+
+hotspot_westernslope <- st_read("../data/shapefiles/hotspot_westernslope.geojson")
+hotspot_wyoming <- st_read("../data/shapefiles/hotspot_wyoming.geojson")
+hotspot_minnesota <- st_read("../data/shapefiles/hotspot_minnesota.geojson")
+hotspot_california <- st_read("../data/shapefiles/hotspot_california.geojson")
+hotspot_oregon <- st_read("../data/shapefiles/hotspot_oregon.geojson")
+hotspot_nevada <- st_read("../data/shapefiles/hotspot_nevada.geojson")
+hotspot_ne <- st_read("../data/shapefiles/hotspot_ne.geojson")
+
+temp_area(hotspot_westernslope) # 78131.71 sq. km.
+temp_area(hotspot_wyoming)      # 21661.21
+temp_area(hotspot_minnesota)    # 40516.71
+temp_area(hotspot_california)   # 42834.26
+temp_area(hotspot_oregon)       # 47194.23
+temp_area(hotspot_nevada)       # 17428.7
+temp_area(hotspot_ne)           # 24887.8
+```
+
+## Acknowledgements
+
+The repository ["Here And Now: These Maps Show How Climate Change Has Already Transformed The Earth"](https://github.com/BuzzFeedNews/2019-04-climate-change) by Peter Aldhous of BuzzFeed News was instructive in conducting this analysis.

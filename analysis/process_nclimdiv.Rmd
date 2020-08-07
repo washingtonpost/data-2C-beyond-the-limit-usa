@@ -1,0 +1,165 @@
+---
+title: "Processing nClimDiv data"
+author: "John Muyskens"
+date: "8/5/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+library(tidyverse)
+```
+
+This file contains code to process raw [NOAA nClimDiv monthly average temperature data](https://data.nodc.noaa.gov/cgi-bin/iso?id=gov.noaa.ncdc:C00005), aggregated to the national, state and county level.
+
+To analyze warming temperatures in contiguous U.S., the Washington Post turned to the National Oceanic and Atmospheric Administration's, Climate Divisional Database (nClimDiv). This data set includes monthly state and county level temperatures from 1895 to the present for the lower 48 states. NOAA does not provide this data for Hawaii, and its data for Alaska begins in 1925.
+
+Our approach examines a linear trend in mean temperature from 1895 to 2019 – analyzing both annual average temperatures and also temperatures for the three month winter season. While not the only possible approach for analyzing temperature changes over time, this is a widely used method.
+
+The nClimDiv files don't contain FIPS codes or state names. Instead the numeric IDs are in alphabetical order without Alaska or Hawaii so we will need to create some tables to translate these IDs into FIPS codes.
+```{r message=FALSE}
+# https://www2.census.gov/geo/docs/reference/state.txt?#
+statefips <- read_delim(
+  "../data/raw/state.txt",
+  "|",
+  escape_double = FALSE,
+  trim_ws = TRUE,
+  col_types = cols(
+    STATE = col_character(),
+    STUSAB = col_character(),
+    STATE_NAME = col_character(),
+    STATENS = col_character()
+  )
+)
+
+noaastate <-
+  read_csv("../data/raw/noaastate.txt") %>%
+  left_join(statefips, by=c("state"="STATE_NAME"))
+```
+
+If you want to run this analyis on the latest available data, you'll need to download these files from the [National Climatic Data Center FTP](ftp://ftp.ncdc.noaa.gov/pub/data/cirs/climdiv/). The files you are looking for are `climdiv-tmpcst-v1.0.0-YYYYMMDD.txt` and `climdiv-tmpccy-v1.0.0-YYYYMMDD.txt`. The data comes in a fixed-width format, so parsing it is... not fun. But I've done the hard work for you here. The national file can [be downloaded as a CSV](https://www.ncdc.noaa.gov/cag/national/time-series/110-tavg-all-12-1895-2020.csv?base_prd=true&begbaseyear=1901&endbaseyear=2000) from NOAA's [Climate at a Glance interface](https://www.ncdc.noaa.gov/cag/national/time-series/110/tavg/all/12/1895-2020?base_prd=true&begbaseyear=1901&endbaseyear=2000).
+
+```{r}
+national_filepath <- "../data/raw/110-tavg-all-12-1895-2020.csv"
+state_filepath    <- "../data/raw/climdiv-tmpcst-v1.0.0-20200106"
+county_filepath   <- "../data/raw/climdiv-tmpccy-v1.0.0-20200106"
+
+# To use the latest data, download the files, uncomment the following lines and change the filenames to match the files you downloaded.
+# national_filepath  <- "../data/raw/110-tavg-12-12-1895-YYYY.txt"
+# state_filepath     <- "../data/raw/climdiv-tmpcst-v1.0.0-YYYYMMDD.txt"
+# county_filepath    <- "../data/raw/climdiv-tmpccy-v1.0.0-YYYYMMDD.txt"
+
+climdiv_national <- read_csv(
+  national_filepath, 
+  skip=4, 
+  col_types = cols(
+    Date = col_character(),
+    Value = col_double(),
+    Anomaly = col_double()
+  )
+) %>% 
+  mutate(
+    year = as.integer(substr(Date, 0, 4)), 
+    temp = Value,
+    temp_c = Value / 1.8,
+    anomaly_c = Anomaly / 1.8, 
+    state="Average") %>% 
+  select(-Date, -Value)
+
+climdiv_state <- 
+  read_fwf(
+    state_filepath, 
+    fwf_widths(
+      c(1, 2, 1, 2, 4, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7), 
+      c("dont_care", "noaa_state_order", "divisional_number", "code", "year", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    ),
+    col_types = cols(
+      dont_care = col_integer(),
+      noaa_state_order = col_character(),
+      divisional_number = col_integer(),
+      code = col_character(),
+      year = col_integer(),
+      Jan = col_double(),
+      Feb = col_double(),
+      Mar = col_double(),
+      Apr = col_double(),
+      May = col_double(),
+      Jun = col_double(),
+      Jul = col_double(),
+      Aug = col_double(),
+      Sep = col_double(),
+      Oct = col_double(),
+      Nov = col_double(),
+      Dec = col_double()
+    )
+  ) %>% 
+  filter(noaa_state_order <= 48 & dont_care == "0") %>% 
+  left_join(noaastate, by="noaa_state_order") %>% 
+  mutate(fips = STATE) %>%
+  select(-code, -STUSAB, -STATENS, -STATE, -dont_care, -divisional_number, -noaa_state_order, -state) %>% 
+  gather("month", "temp", -year, -fips) %>% 
+  mutate(temp=as.numeric(temp))
+
+# Note that NOAA retroceded D.C. to Maryland for the purposes of this data set, so it shows up here with the ID 18511.
+climdiv_county <-
+  read_fwf(
+    county_filepath,
+    fwf_widths(
+      c(2, 3, 2, 4, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7),
+      c("noaa_state_order", "countyfips", "code", "year", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    ),
+    col_types = cols(
+      noaa_state_order = col_character(),
+      countyfips = col_character(),
+      code = col_character(),
+      year = col_integer(),
+      Jan = col_double(),
+      Feb = col_double(),
+      Mar = col_double(),
+      Apr = col_double(),
+      May = col_double(),
+      Jun = col_double(),
+      Jul = col_double(),
+      Aug = col_double(),
+      Sep = col_double(),
+      Oct = col_double(),
+      Nov = col_double(),
+      Dec = col_double()
+    )
+  ) %>%
+  filter(noaa_state_order <= 48) %>% 
+  left_join(noaastate, by="noaa_state_order") %>%
+  mutate(fips = paste0(STATE, countyfips)) %>%
+  dplyr::select(-code, -STATE, -STUSAB, -STATENS, -noaa_state_order, -countyfips, -state) %>%
+  gather("month", "temp", -fips, -year) %>%
+  mutate(temp=as.numeric(temp), fips=case_when(fips=="24511"~"11001", TRUE~fips))
+```
+
+Next, we calculate the annual mean temperature for the nation as a whole, each state and county.
+```{r}
+climdiv_national_year <-
+  climdiv_national %>%
+  filter(year < 2020) %>%
+  group_by(year) %>%
+  summarise(temp = mean(temp)) %>%
+  mutate(tempc = (temp - 32) * 5 / 9)
+
+write_csv(climdiv_national_year, "../data/processed/climdiv_national_year.csv")
+
+climdiv_state_year <-
+  climdiv_state %>%
+  filter(year < 2020) %>%
+  group_by(fips, year) %>%
+  summarise(temp = mean(temp)) %>%
+  mutate(tempc = (temp - 32) * 5 / 9)
+
+write_csv(climdiv_state_year, "../data/processed/climdiv_state_year.csv")
+
+climdiv_county_year <-
+  climdiv_county %>%
+  filter(year < 2020) %>%
+  group_by(fips, year) %>%
+  summarise(temp = mean(temp)) %>%
+  mutate(tempc = (temp - 32) * 5 / 9)
+
+write_csv(climdiv_county_year, "../data/processed/climdiv_county_year.csv")
+```

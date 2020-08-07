@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "hotspot_california",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "Drawings": "hotspot_california" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -120.921387917684569, 36.123853282855819 ], [ -120.921387917684569, 32.669200039226411 ], [ -115.407229855737626, 32.669200039226411 ], [ -115.407229855737626, 36.123853282855819 ], [ -120.921387917684569, 36.123853282855819 ] ] ] } }
+]
+}

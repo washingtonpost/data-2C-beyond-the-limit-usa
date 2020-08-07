@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "hotspot_minnesota",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "Drawings": "hotspot_minnesota" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -98.44953292426824, 49.959075167198598 ], [ -98.44953292426824, 45.640758612661841 ], [ -91.241266060156875, 45.640758612661841 ], [ -91.241266060156875, 49.959075167198598 ], [ -98.44953292426824, 49.959075167198598 ] ] ] } }
+]
+}

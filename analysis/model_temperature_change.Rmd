@@ -1,0 +1,245 @@
+---
+title: "Modeling temperature change"
+author: "John Muyskens"
+date: "8/5/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(scales)
+library(sf)
+```
+
+First we will load some census data into two tables. The first contains population by county, which we will use later on in our county-level analysis. The second functions as a lookup for county and state names by fips code.
+
+```{r message=FALSE}
+census <- read_csv("../data/raw/co-est2018-alldata.csv") %>% 
+  mutate(fips=paste0(STATE, COUNTY)) %>%
+  dplyr::select(fips, POPESTIMATE2018)
+
+countynames <- read_csv("../data/raw/co-est2018-alldata.csv") %>% 
+  mutate(fips=paste0(STATE, COUNTY)) %>% 
+  dplyr::select(fips, CTYNAME, STNAME)
+```
+
+Next we define two formatting functions that will make our output more human-readable.
+```{r}
+fmt_c <- function(degrees_celsius) {
+  paste0(format(degrees_celsius, digits=3), "ºC")
+}
+
+fmt_f <- function(degrees_fahrenheit) {
+  paste0(format(degrees_fahrenheit, digits=3), "ºF")
+}
+```
+
+The function `modelAnnualTempChg` uses linear regression to model the relationship between the year and temperature. The slope of this model is an estimate of the rate at which the temperature is changing, which we then multiply by 124 to extrapolate the rate to an estimate of temperature change over the entire period from 1895 to 2019.
+```{r}
+# this part is split out because we will reuse it later on.
+extractModelVariables <-
+  . %>% 
+  mutate(
+    slope = mod$coefficients[2],
+    intercept = mod$coefficients[1],
+    pvalue=summary(mod)$coefficients[,4][2], 
+    rsquared=summary(mod)$r.squared,
+    tempchg = slope * 124, 
+    centurychg = slope * 100, 
+    decadechg = slope * 10,
+    tempchg_c = tempchg / 1.8,
+    decadechg_c = decadechg / 1.8,
+    bin = cut(tempchg_c, c(-Inf, 0, 0.5, 1.0, 1.5, 2, Inf))
+  )
+
+modelAnnualTempChg <-
+  . %>% 
+  do(mod = lm(temp ~ year, data = .)) %>% 
+  extractModelVariables()
+```
+
+We'll first demonstrate the model on the data for the Lower 48:
+
+```{r message=FALSE}
+climdiv_national <- read_csv("../data/processed/climdiv_national.csv")
+
+model_national <- 
+  climdiv_national %>% 
+  group_by(state) %>% # our fancy dplyr function expects to receive groups
+  modelAnnualTempChg() 
+```
+
+Our model's temperature change estimate for the Lower 48 is `r fmt_c(model_national$tempchg_c)` (`r fmt_f(model_national$tempchg)`).
+
+We also want to analyze temperature change on a seasonal basis. To do this we classify the months into seasons. One tricky thing is that we want to consider December and then the following January and February as one contiguous season. To do this, we create a `year_adj` variable that treats January and February as part of the previous year.
+
+```{r}
+# the spiciest function in this notebook
+season <- . %>% 
+  mutate(
+    season = case_when(
+      month %in% c("Dec", "Jan", "Feb") ~ "Winter",
+      month %in% c("Mar", "Apr", "May") ~ "Spring",
+      month %in% c("Jun", "Jul", "Aug") ~ "Summer",
+      month %in% c("Sep", "Oct", "Nov") ~ "Fall"
+    ),
+    year_adj = ifelse(month %in% c("Jan", "Feb"), year - 1, year)
+  )
+
+modelSeasonalTempChg <-
+  . %>% 
+  do(mod = lm(temp ~ year_adj, data = .)) %>% 
+  extractModelVariables()
+```
+
+## State analysis
+
+Lets use these models to find the fastest warming states in the Lower 48.
+
+```{r message=FALSE}
+climdiv_state <- read_csv("../data/processed/climdiv_state.csv")
+climdiv_state_year <- read_csv("../data/processed/climdiv_state_year.csv")
+statefips <- read_delim(
+  "../data/raw/state.txt",
+  "|",
+  escape_double = FALSE,
+  trim_ws = TRUE,
+  col_types = cols(
+    STATE = col_character(),
+    STUSAB = col_character(),
+    STATE_NAME = col_character(),
+    STATENS = col_character()
+  )
+)
+
+model_state <-
+  climdiv_state_year %>% 
+  group_by(fips) %>% 
+  modelAnnualTempChg() %>% 
+  left_join(statefips, by=c("fips"="STATE")) %>%
+  arrange(desc(tempchg))
+
+head(model_state, 10) %>% 
+  mutate(State=STATE_NAME, `Temperature change`=paste0(fmt_c(tempchg_c), " (", fmt_f(tempchg), ")")) %>% 
+  select(State, `Temperature change`) %>% 
+  knitr::kable()
+```
+
+Next, we find the fastest warming states in winter.
+```{r}
+model_state_seasonal_tidy <-
+  season(climdiv_state) %>%
+  group_by(fips, year_adj, season) %>% 
+  summarise(temp = mean(temp)) %>% 
+  mutate(temp_c = (temp - 32) / 1.8) %>%
+  filter(year_adj <= 2019 & year_adj >= 1895) %>% 
+  group_by(fips, season) %>% 
+  modelSeasonalTempChg() %>% 
+  dplyr::select(fips, season, tempchg_c)
+
+model_state_seasonal_max <-
+  model_state_seasonal_tidy %>% 
+  group_by(fips) %>% 
+  arrange(-tempchg_c) %>% 
+  summarise(max_warming_season=head(season, 1))
+
+model_state_seasonal <-
+  model_state_seasonal_tidy %>% 
+  spread(season, tempchg_c) %>% 
+  left_join(model_state_seasonal_max, by="fips") %>% 
+  left_join(select(model_state, fips, tempchg_c), by="fips") %>% 
+  left_join(statefips, by=c("fips"="STATE")) %>%
+  rename(Annual=tempchg_c) %>% 
+  arrange(-Annual) %>% 
+  select(-STUSAB, -STATENS) %>% 
+  select(fips, STATE_NAME, Annual, everything())
+
+write_csv(model_state_seasonal, "../data/processed/model_state.csv")
+  
+head(model_state_seasonal, 10) %>% 
+  mutate(State=STATE_NAME, `Winter temperature change`=paste0(fmt_c(Winter), " (", fmt_f(Winter * 1.8), ")")) %>% 
+  select(State, `Winter temperature change`) %>% 
+  knitr::kable()
+```
+
+
+## County analysis
+
+Now we'll do the same thing, but on the county level.
+
+```{r}
+climdiv_county <- read_csv("../data/processed/climdiv_county.csv")
+climdiv_county_year <- read_csv("../data/processed/climdiv_county_year.csv")
+
+model_county <-
+  climdiv_county_year %>% 
+  group_by(fips) %>% 
+  modelAnnualTempChg() %>%
+  left_join(census, by="fips")
+
+model_county_seasonal_tidy <-
+  season(climdiv_county) %>%
+  group_by(fips, year_adj, season) %>% 
+  summarise(temp = mean(temp)) %>% 
+  filter(year_adj <= 2019 & year_adj >= 1895) %>% 
+  group_by(fips, season) %>% 
+  modelSeasonalTempChg() %>% 
+  left_join(census, by="fips") %>% 
+  dplyr::select(fips, season, tempchg_c)
+
+model_county_seasonal_max <-
+  model_county_seasonal_tidy %>% 
+  group_by(fips) %>% 
+  arrange(-tempchg_c) %>% 
+  summarise(max_warming_season=head(season, 1))
+
+model_county_seasonal <-
+  model_county_seasonal_tidy %>% 
+  spread(season, tempchg_c) %>% 
+  left_join(model_county_seasonal_max, by="fips") %>% 
+  left_join(select(model_county, fips, tempchg_c), by="fips") %>% 
+  left_join(countynames, by="fips") %>% 
+  rename(Annual=tempchg_c) %>% 
+  arrange(-Annual) %>% 
+  select(fips, CTYNAME, STNAME, Annual, everything())
+
+write_csv(model_county_seasonal, "../data/processed/model_county.csv")
+```
+
+
+To find the number of people living in a county that has warmed by 2ºC or more, we aggregate the counties based on the temperature change category.
+
+```{r}
+# Population of the 3,107 counties in our analysis (Lower 48 + D.C.)
+totalpop <- sum(model_county$POPESTIMATE2018)
+
+group_by(model_county, bin) %>% 
+  summarise(pop = sum(POPESTIMATE2018)) %>% 
+  mutate(pct = percent(pop / totalpop)) %>% 
+  knitr::kable()
+```
+
+Now we'll join the county data to a shapefile so we can map it. You'll need to download [this shapefile from the Census](https://www.census.gov/geographies/mapping-files/time-series/geo/carto-boundary-file.html) to run this code. You can run `make` to automate the download process.
+
+```{r message=FALSE, warning=FALSE}
+countyshp <- 
+  st_read("../data/shapefiles/cb_2018_us_county_20m/cb_2018_us_county_20m.shp")
+
+# ALAND is square meters
+countyshp_data <-
+  countyshp %>%
+  mutate(fips=paste0(STATEFP, COUNTYFP)) %>%
+  left_join(select(model_county, fips, tempchg, tempchg_c, POPESTIMATE2018), by="fips") %>%
+  mutate(popdensity_land = POPESTIMATE2018 / ALAND)
+
+# 113 county shapes without corresponding data. Note: The city of Lexington, VA is missing from the data. 51678
+countyshp %>% 
+  mutate(fips=paste0(STATEFP, COUNTYFP)) %>%
+  anti_join(select(model_county, fips, tempchg), by="fips")# %>% View()
+
+# No data without a county shape
+select(model_county, fips, tempchg) %>% 
+  anti_join(mutate(countyshp, fips=paste0(STATEFP, COUNTYFP)), by="fips")# %>% View()
+
+st_write(countyshp_data, "../data/processed/model_county.geojson", delete_dsn = TRUE)
+```

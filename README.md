@@ -11,20 +11,20 @@ Note that the first two stories, published in 2019, used an earlier version of t
 
 ## About our analysis
 
-To analyze warming temperatures in the United States, The Washington Post used the National Oceanic and Atmospheric Administration’s Climate Divisional Database (nClimDiv) and Gridded 5km GHCN-Daily Temperature and Precipitation Dataset (nClimGrid) data sets, which provide monthly temperature data between 1895 and 2019 for the Lower 48 states. We calculated annual mean temperature trends in each state and county in the Lower 48 using linear regression — analyzing both annual average temperatures and temperatures for the three-month winter season (December, January and February). 
+To analyze warming temperatures in the United States, The Washington Post used the National Oceanic and Atmospheric Administration’s Climate Divisional Database (nClimDiv) and Gridded 5km GHCN-Daily Temperature and Precipitation Dataset (nClimGrid) data sets, which provide monthly temperature data between 1895 and 2019 for the Lower 48 states. We calculated annual mean temperature trends in each state and county in the Lower 48 using linear regression — analyzing both annual average temperatures and temperatures for the three-month winter season (December, January and February).
 
 ## How to use the data
 
 We are offering several data files that are the product of our analysis of climate change in the contiguous United States from 1895-2019. When publishing a story, graphic or other work based on this data set, please credit The Washington Post, link to this repository and [send us an email](mailto:2c-data@washpost.com) so that we can track the ways in which this data is used.
 
-Annual average temperatures the Lower 48 [`/data/processed/climdiv_national_year.csv`](https://github.com/WPMedia/data-climate-change-usa/raw/master/data/processed/climdiv_national_year.csv), each state [`/data/processed/climdiv_state_year.csv`](https://github.com/WPMedia/data-climate-change-usa/raw/master/data/processed/climdiv_state_year.csv) and county [`/data/processed/climdiv_county_year.csv`](https://raw.githubusercontent.com/WPMedia/data-climate-change-usa/master/data/processed/climdiv_county_year.csv?token=AANMHDCTPULTZ7L3ENA6EY27GYDNM). The code to produce this file can be found in `/analysis/process_nclimdiv.Rmd`. Each row has the following variables:
+Annual average temperatures the Lower 48 [`/data/processed/climdiv_national_year.csv`](https://github.com/washingtonpost/washingtonpost/data-2C-beyond-the-limit-usa/raw/master/data/processed/climdiv_national_year.csv), each state [`/data/processed/climdiv_state_year.csv`](https://github.com/washingtonpost/data-2C-beyond-the-limit-usa/raw/master/data/processed/climdiv_state_year.csv) and county [`/data/processed/climdiv_county_year.csv`](https://raw.githubusercontent.com/washingtonpost/data-2C-beyond-the-limit-usa/master/data/processed/climdiv_county_year.csv). The code to produce this file can be found in `/analysis/process_nclimdiv.Rmd`. Each row has the following variables:
 
 - `year`
 - `fips` A two digit fips code in the state file and a five digit code in the county file, not present in the national file
 - `temp` The average annual temperature in Fahrenheit
 - `tempc` The average annual temperature in Celsius
 
-Temperature change estimates for each of the Lower 48 states   [`/data/processed/model_state.csv`](https://github.com/washingtonpost/data-climate-change-usa/raw/main/data/processed/model_state.csv). The code to produce this file is found in `/analysis/model_temperature_change.Rmd`. Each row has the following variables
+Temperature change estimates for each of the Lower 48 states   [`/data/processed/model_state.csv`](https://github.com/washingtonpost/data-2C-beyond-the-limit-usa/raw/main/data/processed/model_state.csv). The code to produce this file is found in `/analysis/model_temperature_change.Rmd`. Each row has the following variables
 
 - `fips` A two digit fips code for the state
 - `STATE_NAME` the state name
@@ -35,7 +35,7 @@ Temperature change estimates for each of the Lower 48 states   [`/data/processed
 - `Winter` temperature change in December and the following January and February
 - `max_warming_season` the season where temperatures are increasing fastest
 
-Temperature change estimates for counties in the contiguous U.S. can be found in [`/data/processed/model_county.csv`](https://github.com/washingtonpost/data-climate-change-usa/raw/main/data/processed/model_county.csv). The code to produce this file is found in `/analysis/model_temperature_change.Rmd`.  Each row has the following variables
+Temperature change estimates for counties in the contiguous U.S. can be found in [`/data/processed/model_county.csv`](https://github.com/washingtonpost/data-2C-beyond-the-limit-usa/raw/main/data/processed/model_county.csv). The code to produce this file is found in `/analysis/model_temperature_change.Rmd`.  Each row has the following variables
 
 - `fips` A five digit fips code for the county
 - `CTYNAME` the name of the county
